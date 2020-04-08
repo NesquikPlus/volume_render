@@ -261,9 +261,9 @@ void calculatePlanes()
     }
 
     vertexBuffer.clear();
-    float zValue = vertices[minIndex].z;
+    
 
-    while(zValue < vertices[maxIndex].z)
+    for(float zValue = vertices[minIndex].z; zValue < vertices[maxIndex].z; zValue += 0.005f)
     {
         vector<Vertex> planeVerticesInitial(0);
         //For each plane(zValue) find each edge's intersection point.
@@ -318,7 +318,6 @@ void calculatePlanes()
 
             vertexBuffer.push_back(midPoint);
         }
-        zValue += 0.005f;
     }
 }
 
