@@ -3,7 +3,8 @@
 #include <algorithm>
 #include <unistd.h>
 #include <utility> 
-#include <limits>     
+#include <limits>
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <stb_image.h>
@@ -13,13 +14,19 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/ext.hpp>
 
-#include "shader_m.h"
-#include "camera.h"
+#include "Shader.h"
+#include "Camera.h"
 
-#define DATA_WIDTH 128
-#define DATA_HEIGHT 128
-#define DATA_DEPTH 128
-#define DATA_FILE "brain.txt"
+//TODO: Pseudo angles for sorting polygon vertices.
+//TODO: Use constant number of slices instead of zValue += 0.005f
+//TODO: Automatic texture coordinate generation.
+//TODO: Use EBO.
+//TODO: Camera process mouse movement, zoom, support arbitrary initial position.
+
+#define DATA_WIDTH 256
+#define DATA_HEIGHT 256
+#define DATA_DEPTH 256
+#define DATA_FILE "brain256.raw"
 
 using namespace std;
 
@@ -47,18 +54,20 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
 void calculatePlanes();
-bool isPointBetween(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3);
 float pseudoAngle(glm::vec3 p1, glm::vec3 p2);
 float positiveAngle(glm::vec3 vec);
 
-// settings
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+// window
+const unsigned int WINDOW_WIDTH = 800;
+const unsigned int WINDOW_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 1.0f));
-float lastX = SCR_WIDTH / 2.0f;
-float lastY = SCR_HEIGHT / 2.0f;
+glm::vec3 camPos =  glm::vec3(0.25f, 0.25f, 2.0f);
+glm::vec3 center = glm::vec3(0.25f, 0.25f, 0.25f);
+Camera camera(camPos, center);
+
+float lastX = WINDOW_WIDTH / 2.0f;
+float lastY = WINDOW_HEIGHT / 2.0f;
 bool firstMouse = true;
 
 // timing
@@ -69,28 +78,28 @@ vector<Vertex> vertexBuffer;
 
 glm::vec3 worldSpaceCubeVertices[] = 
 {
-    glm::vec3(-0.5f, -0.5f, -0.5f), //sol alt arka
-    glm::vec3(-0.5f,  0.5f, -0.5f), //sol ust arka
-    glm::vec3( 0.5f, -0.5f, -0.5f), //sag alt arka
-    glm::vec3( 0.5f,  0.5f, -0.5f), //sag ust arka
+    glm::vec3(-0.5f, -0.5f, -0.5f), //left bottom back
+    glm::vec3(-0.5f,  0.5f, -0.5f),  //left top back
+    glm::vec3( 0.5f, -0.5f, -0.5f),  //right bottom back
+    glm::vec3( 0.5f,  0.5f, -0.5f),  //right top back
 
-    glm::vec3(-0.5f, -0.5f,  0.5f), //sol alt on
-    glm::vec3(-0.5f,  0.5f,  0.5f), //sol ust on
-    glm::vec3( 0.5f, -0.5f,  0.5f), //sag alt on
-    glm::vec3( 0.5f,  0.5f,  0.5f)  //sag ust on
+    glm::vec3(-0.5f, -0.5f,  0.5f),  //left bottom front
+    glm::vec3(-0.5f,  0.5f,  0.5f),  //left top front
+    glm::vec3( 0.5f, -0.5f,  0.5f),  //right bottom front
+    glm::vec3( 0.5f,  0.5f,  0.5f)  //right top front
 };
 
 glm::vec3 verticesTexCoords[] = 
 {
-    glm::vec3(-1.0f, -1.0f, -1.0f), //sol alt arka
-    glm::vec3(-1.0f,  1.0f, -1.0f), //sol ust arka
-    glm::vec3( 1.0f, -1.0f, -1.0f), //sag alt arka
-    glm::vec3( 1.0f,  1.0f, -1.0f), //sag ust arka
+    glm::vec3(-1.0f, -1.0f, -1.0f), //left bottom back
+    glm::vec3(-1.0f,  1.0f, -1.0f), //left top back
+    glm::vec3( 1.0f, -1.0f, -1.0f), //right bottom back
+    glm::vec3( 1.0f,  1.0f, -1.0f), //right top back
 
-    glm::vec3(-1.0f, -1.0f,  1.0f), //sol alt on
-    glm::vec3(-1.0f,  1.0f,  1.0f), //sol ust on
-    glm::vec3( 1.0f, -1.0f,  1.0f), //sag alt on
-    glm::vec3( 1.0f,  1.0f,  1.0f)  //sag ust on
+    glm::vec3(-1.0f, -1.0f,  1.0f), //left bottom front
+    glm::vec3(-1.0f,  1.0f,  1.0f), //left top front
+    glm::vec3( 1.0f, -1.0f,  1.0f), //right bottom front
+    glm::vec3( 1.0f,  1.0f,  1.0f)  //right top front
 };
 
 pair<int, int> edges[] =
@@ -114,10 +123,10 @@ pair<int, int> edges[] =
 int main(void)
 {
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Volume Render", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Volume Render", NULL, NULL);
     if (window == NULL){
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -134,9 +143,9 @@ int main(void)
     }
 
     //Read texture from file
-    unsigned char data[DATA_WIDTH * DATA_HEIGHT * DATA_DEPTH];
+    unsigned char* AMPLITUDES = new unsigned char[DATA_WIDTH * DATA_HEIGHT * DATA_DEPTH];
     FILE* fp = fopen(DATA_FILE, "r");
-    fread(data , sizeof(unsigned char), sizeof(data), fp);
+    fread(AMPLITUDES , sizeof(unsigned char), DATA_WIDTH * DATA_HEIGHT * DATA_DEPTH, fp);
     fclose (fp);
 
     // configure global opengl state
@@ -168,8 +177,6 @@ int main(void)
     // load and create a texture
     unsigned int texture1;
 
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 1);//TODO: Gerekli mi?
-
     glGenTextures(1, &texture1);
     glBindTexture(GL_TEXTURE_3D, texture1);
     // set the texture wrapping parameters
@@ -177,10 +184,10 @@ int main(void)
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
     // set texture filtering parameters
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);//bilinear filtering
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);//bilinear filtering
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);//trilinear filtering
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);//trilinear filtering
 
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, DATA_WIDTH, DATA_HEIGHT, DATA_DEPTH, 0, GL_RED, GL_UNSIGNED_BYTE, data);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, DATA_WIDTH, DATA_HEIGHT, DATA_DEPTH, 0, GL_RED, GL_UNSIGNED_BYTE, AMPLITUDES);
 
     glEnable(GL_TEXTURE_3D);
     //glGenerateMipmap(GL_TEXTURE_3D);//TODO: mipmap gerekli mi?
@@ -199,7 +206,7 @@ int main(void)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
         theShader.use();
 
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(0.78f, (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.1f, 100.0f);
         theShader.setMat4("projection", projection);
 
         // render boxes
@@ -214,7 +221,7 @@ int main(void)
         glfwPollEvents();
     }
 
-    // optional: de-allocate all resources once they've outlived their purpose:
+    //de-allocate all resources once they've outlived their purpose:
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
 
@@ -237,40 +244,42 @@ void calculatePlanes()
     unsigned int vertexCount = 8;
     unsigned int edgeCount = 12;
 
-    glm::vec3 vertices[vertexCount];
-    glm::mat4 viewMatrix = camera.GetViewMatrix();
+    //Transform world space vertex coords to view space vertex coords.
+    glm::vec3 vertices_viewspace[vertexCount];
+    glm::mat4 viewmatrix = camera.GetViewMatrix();
     
     for(int i=0; i < vertexCount; i++)
     {
-        glm::vec4 tmp = viewMatrix * glm::vec4(worldSpaceCubeVertices[i],1.0f);
-        vertices[i] = glm::vec3(tmp);
+        glm::vec4 vertex_viewspace = viewmatrix * glm::vec4(worldSpaceCubeVertices[i],1.0f);
+        vertices_viewspace[i] = glm::vec3(vertex_viewspace);
     }
-    //Find min max z viewSpaceCubeVertex
-    int minIndex = 0;
-    int maxIndex = 0;
+
+    //Find min and max z valued vertices in view space.
+    int minz_idx = 0;
+    int maxZ_idx = 0;
 
     for(int i=0; i< vertexCount; i++)
     {
-        if(vertices[i].z < vertices[minIndex].z){
-            minIndex = i;
+        if(vertices_viewspace[i].z < vertices_viewspace[minz_idx].z){
+            minz_idx = i;
         }
 
-        if(vertices[i].z > vertices[maxIndex].z){
-            maxIndex = i;
+        if(vertices_viewspace[i].z > vertices_viewspace[maxZ_idx].z){
+            maxZ_idx = i;
         }
     }
 
     vertexBuffer.clear();
     
-
-    for(float zValue = vertices[minIndex].z; zValue < vertices[maxIndex].z; zValue += 0.005f)
+    //Slice the bounding box with view-aligned planes.
+    //For each plane(zValue) find the intersection points of bounding box's edges.
+    for(float zValue = vertices_viewspace[minz_idx].z; zValue < vertices_viewspace[maxZ_idx].z; zValue += 0.005f)
     {
-        vector<Vertex> planeVerticesInitial(0);
-        //For each plane(zValue) find each edge's intersection point.
+        vector<Vertex> planeVertices(0);//max 6 intersections possible for a plane
         for(int i=0; i < edgeCount; i++)
         {
-            glm::vec3 p1 = vertices[edges[i].first];
-            glm::vec3 p2 = vertices[edges[i].second];
+            glm::vec3 p1 = vertices_viewspace[edges[i].first];
+            glm::vec3 p2 = vertices_viewspace[edges[i].second];
             glm::vec3 p1TexCoord = verticesTexCoords[edges[i].first];
             glm::vec3 p2TexCoord = verticesTexCoords[edges[i].second];
 
@@ -278,43 +287,38 @@ void calculatePlanes()
             //Solve parametric equation of line for zValue, p1.z, p2.z and find t.
             //zValue = p1.z + (p2.z - p1.z) * t
 
-            if(p2.z - p1.z == 0)//No intersection with this edge.
-                continue;
-
             float t = (zValue - p1.z)/(p2.z - p1.z);
+            if(t < 0 || t > 1)//No intersection with this edge.
+            	continue;
+
             glm::vec3 vertexCoord(p1.x + (p2.x -p1.x) * t, p1.y + (p2.y -p1.y) * t, zValue);
-            
-            if(isPointBetween(vertexCoord, p1, p2) == false)//No intersection with this edge.
-                continue;
-
             glm::vec3 texCoord = p1TexCoord + (p2TexCoord - p1TexCoord) * t;
-            //std::cout<<glm::to_string(texCoord)<<std::endl;
             Vertex intersectionPoint(vertexCoord, texCoord);
-            planeVerticesInitial.push_back(intersectionPoint);
+            planeVertices.push_back(intersectionPoint);
         }
 
-        //Sort vertices of the plane in planeVerticesInitial ccw.
-        sort(planeVerticesInitial.begin(), planeVerticesInitial.end(), ccw_sort());
+        //Sort vertices of the plane in ccw order.
+        sort(planeVertices.begin(), planeVertices.end(), ccw_sort());
 
-        //Avarage vertices in planeVerticesInitial find middle vertex for the plane.
+        //Avarage vertices in planeVertices, find middle vertex for the plane.
         Vertex midPoint;
-        for(int i=0; i < planeVerticesInitial.size(); i++)
+        for(int i=0; i < planeVertices.size(); i++)
         {
-            midPoint.vertexCoord += planeVerticesInitial[i].vertexCoord;
-            midPoint.texCoord += planeVerticesInitial[i].texCoord;
+            midPoint.vertexCoord += planeVertices[i].vertexCoord;
+            midPoint.texCoord += planeVertices[i].texCoord;
         }
-        midPoint.vertexCoord /= planeVerticesInitial.size();
-        midPoint.texCoord /= planeVerticesInitial.size();
+        midPoint.vertexCoord /= planeVertices.size();
+        midPoint.texCoord /= planeVertices.size();
         
-        //Construct triangle fan for the plane, add vertices to float vertexBuffer vector.
-        for(int i=0; i < planeVerticesInitial.size(); i++)
+        //Construct triangle fan for the plane then add to a final integrated vector that will be sent to shader.
+        for(int i=0; i < planeVertices.size(); i++)
         {
-            vertexBuffer.push_back(planeVerticesInitial[i]);
+            vertexBuffer.push_back(planeVertices[i]);
 
-            if(i != planeVerticesInitial.size() - 1)
-                vertexBuffer.push_back(planeVerticesInitial[i+1]);
+            if(i != planeVertices.size() - 1)
+                vertexBuffer.push_back(planeVertices[i+1]);
             else
-                vertexBuffer.push_back(planeVerticesInitial[0]);
+                vertexBuffer.push_back(planeVertices[0]);
 
             vertexBuffer.push_back(midPoint);
         }
@@ -358,53 +362,40 @@ float pseudoAngle(glm::vec3 p1, glm::vec3 p2)
 }
 
 
-
-bool isPointBetween(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3)//TODO: Optimize
-{
-    float minX, maxX;
-    float minY, maxY;
-
-    if(p2.x > p3.x){
-        minX = p3.x;
-        maxX = p2.x;
-    }
-    else{
-        maxX = p3.x;
-        minX = p2.x;
-    }
-
-    if(minX > p1.x || p1.x > maxX)
-        return false;
-
-    if(p2.y > p3.y){
-        minY = p3.y;
-        maxY = p2.y;
-    }
-    else{
-        maxY = p3.y;
-        minY = p2.y;
-    }
-
-    if(minY > p1.y || p1.y > maxY)
-        return false;
-
-    return true;
-}
-
-
 void processInput(GLFWwindow *window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.ProcessKeyboard(UPWARD, deltaTime);
+    
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.ProcessKeyboard(DOWNWARD, deltaTime);
+        camera.move(glm::vec3(0.0f, -0.01f, 0.0f));
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.ProcessKeyboard(LEFT, deltaTime);
+        camera.move(glm::vec3(-0.01f, 0.0f, 0.0f));
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.ProcessKeyboard(RIGHT, deltaTime);
+        camera.move(glm::vec3(0.01f, 0.0f, 0.0f));
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        camera.move(glm::vec3(0.0f, 0.01f, 0.0f));
+
+
+    if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS)
+        camera.move(glm::vec3(0.0f, 0.00f, 0.01f));
+
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
+        camera.move(glm::vec3(0.0f, 0.00f, -0.01f));
+
+
+    if (glfwGetKey(window, GLFW_KEY_KP_4) == GLFW_PRESS)
+        camera.rotateLeft();
+
+    if (glfwGetKey(window, GLFW_KEY_KP_6) == GLFW_PRESS)
+        camera.rotateRight();
+
+    if (glfwGetKey(window, GLFW_KEY_KP_2) == GLFW_PRESS)
+        camera.rotateDown();
+
+    if (glfwGetKey(window, GLFW_KEY_KP_8) == GLFW_PRESS)
+        camera.rotateUp();
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -441,5 +432,5 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 // ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-    camera.ProcessMouseScroll(yoffset);
+    //camera.ProcessMouseScroll(yoffset);
 }
