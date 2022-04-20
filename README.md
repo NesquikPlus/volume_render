@@ -6,4 +6,4 @@ Sample raw files are provided for testing.
 
 Implemention is based on the pseudo-code provided here:
 
-https://developer.download.nvidia.com/books/HTML/gpugems/gpugems_ch39.html
+https://developer.nvidia.com/sites/all/modules/custom/gpugems/books/GPUGems/gpugems_ch39.html
