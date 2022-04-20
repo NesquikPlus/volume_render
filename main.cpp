@@ -7,7 +7,6 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <stb_image.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -26,7 +25,7 @@
 #define DATA_WIDTH 256
 #define DATA_HEIGHT 256
 #define DATA_DEPTH 256
-#define DATA_FILE "brain256.raw"
+#define DATA_FILE "./resources/data/brain256.raw"
 
 using namespace std;
 
@@ -155,7 +154,7 @@ int main(void)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // build and compile the shader zprogram
-    Shader theShader("shader.vs", "shader.fs");
+    Shader theShader("./resources/shaders/shader.vs", "./resources/shaders/shader.fs");
 
     unsigned int VBO, VAO;
     glGenVertexArrays(1, &VAO);

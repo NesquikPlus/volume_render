@@ -1,6 +1,15 @@
-LIBS= -lGL -lGLU -lglfw3 -lX11 -lXxf86vm -lXrandr -pthread -lXi -ldl
+CPPFLAGS = -D AMD64 -std=c++17
 
+INC_PATH = -I"C:/opengl/include" 
+LIBS_PATH = -L"C:/opengl/lib/glfw"
+LIBS = -lglfw3 -lpthread
 
-all: main.cpp stb_image.cpp glad.c
-	g++ -o main stb_image.cpp main.cpp glad.c -std=c++17 $(LIBS)
+SRC_FILES = $(shell find . -name "*.cpp" -or -name "*.c")
+OBJ_FILES = *.o
 
+all:
+	g++ -c $(CPPFLAGS) $(SRC_FILES) $(INC_PATH)
+	g++ $(LIBS_PATH) $(OBJ_FILES) $(LIBS) -o Main.exe
+
+clean:
+	rm $(OBJ_FILES)

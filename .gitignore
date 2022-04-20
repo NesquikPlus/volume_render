@@ -1,0 +1,4 @@
+glad.c
+*.o
+*.dll
+*.exe
