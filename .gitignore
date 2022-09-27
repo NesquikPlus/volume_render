@@ -2,3 +2,5 @@ glad.c
 *.o
 *.dll
 *.exe
+build/**
+Debug/**
